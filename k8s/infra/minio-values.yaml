@@ -1,0 +1,18 @@
+# Bitnami MinIO — helm install ebooks-minio bitnami/minio -f minio-values.yaml -n ebooks-infra
+auth:
+  rootUser: ebooks_admin
+  # rootPassword: via --set auth.rootPassword=<value>
+
+persistence:
+  enabled: true
+  size: 50Gi
+
+resources:
+  requests:
+    memory: "256Mi"
+    cpu: "100m"
+  limits:
+    memory: "512Mi"
+    cpu: "500m"
+
+defaultBuckets: "ebooks-covers,ebooks-previews,ebooks-files,ebooks-avatars"

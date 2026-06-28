@@ -1,0 +1,139 @@
+{
+  "uid": "ebooks-commerce",
+  "title": "ebooks.co.mz — Commerce & Payments",
+  "tags": ["ebooks", "commerce"],
+  "timezone": "Africa/Maputo",
+  "schemaVersion": 38,
+  "refresh": "1m",
+  "time": { "from": "now-24h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Orders Created (last 24h)",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 0, "w": 4, "h": 4 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "increase(ebooks_orders_created_total[24h])",
+          "legendFormat": "orders"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Payments Successful (last 24h)",
+      "type": "stat",
+      "gridPos": { "x": 4, "y": 0, "w": 4, "h": 4 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "increase(ebooks_payments_success_total[24h])",
+          "legendFormat": "paid"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "fixed", "fixedColor": "green" } }
+      }
+    },
+    {
+      "id": 3,
+      "title": "Payments Failed (last 24h)",
+      "type": "stat",
+      "gridPos": { "x": 8, "y": 0, "w": 4, "h": 4 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "increase(ebooks_payments_failed_total[24h])",
+          "legendFormat": "failed"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "fixed", "fixedColor": "red" } }
+      }
+    },
+    {
+      "id": 4,
+      "title": "Active Subscriptions",
+      "type": "stat",
+      "gridPos": { "x": 12, "y": 0, "w": 4, "h": 4 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "ebooks_subscriptions_active_total",
+          "legendFormat": "active"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Revenue by Payment Method (last 24h) — MZN",
+      "type": "piechart",
+      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "increase(ebooks_payment_amount_total[24h])",
+          "legendFormat": "{{provider}}"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Payment Success Rate by Provider",
+      "type": "bargauge",
+      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "rate(ebooks_payments_success_total[1h]) / rate(ebooks_payments_attempts_total[1h]) * 100",
+          "legendFormat": "{{provider}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100 } }
+    },
+    {
+      "id": 7,
+      "title": "Orders Timeline",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 12, "w": 24, "h": 8 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "rate(ebooks_orders_created_total[5m]) * 60",
+          "legendFormat": "orders/min"
+        },
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "rate(ebooks_payments_success_total[5m]) * 60",
+          "legendFormat": "payments/min"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Subscription Expiry (next 7 days)",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 20, "w": 6, "h": 4 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "ebooks_subscriptions_expiring_7d_total",
+          "legendFormat": "expiring soon"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 10 },
+              { "color": "red", "value": 50 }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

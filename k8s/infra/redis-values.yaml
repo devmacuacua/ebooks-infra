@@ -1,0 +1,17 @@
+# Bitnami Redis — helm install ebooks-redis bitnami/redis -f redis-values.yaml -n ebooks-infra
+architecture: standalone
+
+auth:
+  enabled: false  # Redis interno — acesso apenas dentro do cluster
+
+master:
+  persistence:
+    enabled: true
+    size: 4Gi
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "300m"

@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate-compose:
+    name: Validate Docker Compose
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate dev compose
+        run: docker compose -f docker/docker-compose.yml config --quiet
+      - name: Validate prod compose
+        run: docker compose -f docker/docker-compose.prod.yml config --quiet
+        env:
+          GHCR_OWNER: placeholder
+          POSTGRES_PASSWORD: placeholder
+          RABBITMQ_PASSWORD: placeholder
+          MINIO_ACCESS_KEY: placeholder
+          MINIO_SECRET_KEY: placeholder
+      - name: Validate observability compose
+        run: docker compose -f docker/docker-compose.yml -f docker/docker-compose.observability.yml config --quiet
+
+  validate-helm:
+    name: Validate Helm chart
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: '3.14.0'
+      - name: Lint chart
+        run: helm lint k8s/chart
+      - name: Template chart (dry-run)
+        run: helm template ebooks k8s/chart --values k8s/values/ebooks-api-gateway.yaml
+
+  validate-scripts:
+    name: Validate shell scripts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Syntax check
+        run: |
+          for f in scripts/*.sh; do
+            bash -n "$f" && echo "OK: $f"
+          done

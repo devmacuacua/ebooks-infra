@@ -1,0 +1,380 @@
+version: '3.9'
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  EBooksStore — Arquitectura de Microserviços
+#
+#  Serviços:
+#    ebooks-api-gateway      → Spring Cloud Gateway    :8080
+#    ebooks-auth-service         → Spring Boot             :8081
+#    ebooks-catalog-service      → Spring Boot             :8082
+#    ebooks-commerce-service     → Spring Boot             :8083
+#    ebooks-reading-service      → NestJS                  :3001
+#    ebooks-notification-service → NestJS                  :3002
+#    ebooks-social-service       → NestJS                  :3003
+#    ebooks-media-service        → NestJS                  :3004
+#    ebooks-partner-service      → NestJS                  :3005
+#    ebooks-web                  → Next.js 15              :3000
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  # ─── INFRAESTRUTURA ─────────────────────────────────────────────────────────
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: ebooks-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ebooks
+      POSTGRES_PASSWORD: ebooks_secret
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    networks: [ebooks-net]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ebooks"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: ebooks-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ebooks
+      RABBITMQ_DEFAULT_PASS: ebooks_secret
+    ports:
+      - "5672:5672"
+      - "15672:15672"  # UI em http://localhost:15672
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks: [ebooks-net]
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: ebooks-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks: [ebooks-net]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  elasticsearch:
+    image: elasticsearch:8.13.0
+    container_name: ebooks-elasticsearch
+    restart: unless-stopped
+    environment:
+      discovery.type: single-node
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+      xpack.security.enabled: "false"
+    ports:
+      - "9200:9200"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    networks: [ebooks-net]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -q '\"status\":\"green\"\\|\"status\":\"yellow\"'"]
+      interval: 20s
+      timeout: 10s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    container_name: ebooks-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ebooks_admin
+      MINIO_ROOT_PASSWORD: ebooks_secret_123
+    ports:
+      - "9000:9000"
+      - "9001:9001"  # Console em http://localhost:9001
+    volumes:
+      - minio_data:/data
+    networks: [ebooks-net]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── SPRING BOOT SERVICES ───────────────────────────────────────────────────
+
+  ebooks-api-gateway:
+    build: ../../ebooks-api-gateway
+    container_name: ebooks-api-gateway
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    env_file: .env
+    environment:
+      PORT: 8080
+      AUTH_SERVICE_URL: http://ebooks-auth-service:8081
+      CATALOG_SERVICE_URL: http://ebooks-catalog-service:8082
+      COMMERCE_SERVICE_URL: http://ebooks-commerce-service:8083
+      READING_SERVICE_URL: http://ebooks-reading-service:3001
+      NOTIFICATION_SERVICE_URL: http://ebooks-notification-service:3002
+      MEDIA_SERVICE_URL: http://ebooks-media-service:3004
+      SOCIAL_SERVICE_URL: http://ebooks-social-service:3003
+      PARTNER_SERVICE_URL: http://ebooks-partner-service:3005
+      DELIVERY_SERVICE_URL: http://ebooks-delivery-service:3006
+      ANALYTICS_SERVICE_URL: http://ebooks-analytics-service:3007
+      REDIS_URL: redis://ebooks-redis:6379
+    depends_on:
+      redis:
+        condition: service_healthy
+      ebooks-auth-service:
+        condition: service_started
+    networks: [ebooks-net]
+
+  ebooks-auth-service:
+    build: ../../ebooks-auth-service
+    container_name: ebooks-auth-service
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    env_file: .env
+    environment:
+      PORT: 8081
+      SPRING_DATASOURCE_URL: jdbc:postgresql://ebooks-postgres:5432/auth_db
+      SPRING_DATASOURCE_USERNAME: ebooks
+      SPRING_DATASOURCE_PASSWORD: ebooks_secret
+      SPRING_RABBITMQ_HOST: ebooks-rabbitmq
+      SPRING_RABBITMQ_USERNAME: ebooks
+      SPRING_RABBITMQ_PASSWORD: ebooks_secret
+      SPRING_DATA_REDIS_URL: redis://ebooks-redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks: [ebooks-net]
+
+  ebooks-catalog-service:
+    build: ../../ebooks-catalog-service
+    container_name: ebooks-catalog-service
+    restart: unless-stopped
+    ports:
+      - "8082:8082"
+    env_file: .env
+    environment:
+      PORT: 8082
+      SPRING_DATASOURCE_URL: jdbc:postgresql://ebooks-postgres:5432/catalog_db
+      SPRING_DATASOURCE_USERNAME: ebooks
+      SPRING_DATASOURCE_PASSWORD: ebooks_secret
+      SPRING_RABBITMQ_HOST: ebooks-rabbitmq
+      SPRING_RABBITMQ_USERNAME: ebooks
+      SPRING_RABBITMQ_PASSWORD: ebooks_secret
+      SPRING_ELASTICSEARCH_URIS: http://ebooks-elasticsearch:9200
+      MINIO_ENDPOINT: http://ebooks-minio:9000
+      MINIO_ACCESS_KEY: ebooks_admin
+      MINIO_SECRET_KEY: ebooks_secret_123
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    networks: [ebooks-net]
+
+  ebooks-commerce-service:
+    build: ../../ebooks-commerce-service
+    container_name: ebooks-commerce-service
+    restart: unless-stopped
+    ports:
+      - "8083:8083"
+    env_file: .env
+    environment:
+      PORT: 8083
+      SPRING_DATASOURCE_URL: jdbc:postgresql://ebooks-postgres:5432/commerce_db
+      SPRING_DATASOURCE_USERNAME: ebooks
+      SPRING_DATASOURCE_PASSWORD: ebooks_secret
+      SPRING_RABBITMQ_HOST: ebooks-rabbitmq
+      SPRING_RABBITMQ_USERNAME: ebooks
+      SPRING_RABBITMQ_PASSWORD: ebooks_secret
+      SPRING_DATA_REDIS_URL: redis://ebooks-redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks: [ebooks-net]
+
+  # ─── NESTJS SERVICES ────────────────────────────────────────────────────────
+
+  ebooks-reading-service:
+    build: ../../ebooks-reading-service
+    container_name: ebooks-reading-service
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    env_file: .env
+    environment:
+      PORT: 3001
+      DATABASE_URL: postgresql://ebooks:ebooks_secret@ebooks-postgres:5432/reading_db
+      RABBITMQ_URL: amqp://ebooks:ebooks_secret@ebooks-rabbitmq:5672
+      REDIS_URL: redis://ebooks-redis:6379
+      MINIO_ENDPOINT: http://ebooks-minio:9000
+      MINIO_ACCESS_KEY: ebooks_admin
+      MINIO_SECRET_KEY: ebooks_secret_123
+      MINIO_BUCKET: ebooks-files
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks: [ebooks-net]
+
+  ebooks-notification-service:
+    build: ../../ebooks-notification-service
+    container_name: ebooks-notification-service
+    restart: unless-stopped
+    ports:
+      - "3002:3002"
+    env_file: .env
+    environment:
+      PORT: 3002
+      DATABASE_URL: postgresql://ebooks:ebooks_secret@ebooks-postgres:5432/notification_db
+      RABBITMQ_URL: amqp://ebooks:ebooks_secret@ebooks-rabbitmq:5672
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks: [ebooks-net]
+
+  ebooks-social-service:
+    build: ../../ebooks-social-service
+    container_name: ebooks-social-service
+    restart: unless-stopped
+    ports:
+      - "3003:3003"
+    env_file: .env
+    environment:
+      PORT: 3003
+      DATABASE_URL: postgresql://ebooks:ebooks_secret@ebooks-postgres:5432/social_db
+      RABBITMQ_URL: amqp://ebooks:ebooks_secret@ebooks-rabbitmq:5672
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks: [ebooks-net]
+
+  ebooks-media-service:
+    build: ../../ebooks-media-service
+    container_name: ebooks-media-service
+    restart: unless-stopped
+    ports:
+      - "3004:3004"
+    env_file: .env
+    environment:
+      PORT: 3004
+      DATABASE_URL: postgresql://ebooks:ebooks_secret@ebooks-postgres:5432/media_db
+      MINIO_ENDPOINT: http://ebooks-minio:9000
+      MINIO_ACCESS_KEY: ebooks_admin
+      MINIO_SECRET_KEY: ebooks_secret_123
+    depends_on:
+      minio:
+        condition: service_healthy
+    networks: [ebooks-net]
+
+  ebooks-partner-service:
+    build: ../../ebooks-partner-service
+    container_name: ebooks-partner-service
+    restart: unless-stopped
+    ports:
+      - "3005:3005"
+    env_file: .env
+    environment:
+      PORT: 3005
+      DATABASE_URL: postgresql://ebooks:ebooks_secret@ebooks-postgres:5432/partner_db
+      RABBITMQ_URL: amqp://ebooks:ebooks_secret@ebooks-rabbitmq:5672
+      CATALOG_SERVICE_URL: http://ebooks-catalog-service:8082
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks: [ebooks-net]
+
+  ebooks-delivery-service:
+    build: ../../ebooks-delivery-service
+    container_name: ebooks-delivery-service
+    restart: unless-stopped
+    ports:
+      - "3006:3006"
+    env_file: .env
+    environment:
+      PORT: 3006
+      DATABASE_URL: postgresql://ebooks:ebooks_secret@ebooks-postgres:5432/delivery_db
+      RABBITMQ_URL: amqp://ebooks:ebooks_secret@ebooks-rabbitmq:5672
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks: [ebooks-net]
+
+  ebooks-analytics-service:
+    build: ../../ebooks-analytics-service
+    container_name: ebooks-analytics-service
+    restart: unless-stopped
+    ports:
+      - "3007:3007"
+    env_file: .env
+    environment:
+      PORT: 3007
+      DATABASE_URL: postgresql://ebooks:ebooks_secret@ebooks-postgres:5432/analytics_db
+      RABBITMQ_URL: amqp://ebooks:ebooks_secret@ebooks-rabbitmq:5672
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks: [ebooks-net]
+
+  # ─── FRONTEND ───────────────────────────────────────────────────────────────
+
+  ebooks-web:
+    build: ../../ebooks-web
+    container_name: ebooks-web
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file: .env
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8080
+      NODE_ENV: production
+    depends_on:
+      - ebooks-api-gateway
+    networks: [ebooks-net]
+
+volumes:
+  postgres_data:
+  rabbitmq_data:
+  redis_data:
+  elasticsearch_data:
+  minio_data:
+
+networks:
+  ebooks-net:
+    driver: bridge

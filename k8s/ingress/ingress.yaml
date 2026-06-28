@@ -1,0 +1,74 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ebooks-ingress
+  namespace: ebooks
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/proxy-body-size: "500m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "10"
+    # Rate limiting
+    nginx.ingress.kubernetes.io/limit-rps: "30"
+    nginx.ingress.kubernetes.io/limit-burst-multiplier: "2"
+    # Security headers
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      add_header X-Frame-Options "SAMEORIGIN" always;
+      add_header X-Content-Type-Options "nosniff" always;
+      add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+spec:
+  tls:
+    - hosts:
+        - ebooks.co.mz
+        - www.ebooks.co.mz
+        - api.ebooks.co.mz
+        - widget.ebooks.co.mz
+      secretName: ebooks-tls
+  rules:
+    # Frontend
+    - host: ebooks.co.mz
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ebooks-web
+                port:
+                  number: 3000
+
+    - host: www.ebooks.co.mz
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ebooks-web
+                port:
+                  number: 3000
+
+    # API Gateway
+    - host: api.ebooks.co.mz
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ebooks-api-gateway
+                port:
+                  number: 8080
+
+    # Widget embed (open CORS)
+    - host: widget.ebooks.co.mz
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ebooks-partner-service
+                port:
+                  number: 3005

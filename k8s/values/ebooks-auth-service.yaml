@@ -1,0 +1,35 @@
+image:
+  repository: ghcr.io/change-me/ebooks-auth-service
+  tag: latest
+service:
+  port: 8081
+health:
+  path: /actuator/health
+  initialDelaySeconds: 45
+resources:
+  requests:
+    memory: "512Mi"
+    cpu: "200m"
+  limits:
+    memory: "512Mi"
+    cpu: "700m"
+autoscaling:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 70
+env:
+  SPRING_DATASOURCE_URL: "jdbc:postgresql://ebooks-postgresql.ebooks-infra.svc.cluster.local:5432/auth_db"
+  SPRING_RABBITMQ_HOST: "ebooks-rabbitmq.ebooks-infra.svc.cluster.local"
+  SPRING_DATA_REDIS_URL: "redis://ebooks-redis-master.ebooks-infra.svc.cluster.local:6379"
+secretEnv:
+  - name: SPRING_DATASOURCE_USERNAME
+    secretKey: POSTGRES_USER
+  - name: SPRING_DATASOURCE_PASSWORD
+    secretKey: POSTGRES_PASSWORD
+  - name: SPRING_RABBITMQ_USERNAME
+    secretKey: RABBITMQ_USER
+  - name: SPRING_RABBITMQ_PASSWORD
+    secretKey: RABBITMQ_PASSWORD
+  - name: JWT_SECRET
+    secretKey: JWT_SECRET

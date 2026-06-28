@@ -231,6 +231,7 @@ services:
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
       MINIO_BUCKET: ebooks-files
+      CATALOG_SERVICE_URL: http://ebooks-catalog-service:8082
     depends_on:
       postgres:
         condition: service_healthy

@@ -250,6 +250,7 @@ services:
       PORT: 3002
       DATABASE_URL: postgresql://${POSTGRES_USER:-ebooks}:${POSTGRES_PASSWORD}@ebooks-postgres:5432/notification_db
       RABBITMQ_URL: amqp://${RABBITMQ_USER:-ebooks}:${RABBITMQ_PASSWORD}@ebooks-rabbitmq:5672
+      AUTH_SERVICE_URL: http://ebooks-auth-service:8081
     depends_on:
       postgres:
         condition: service_healthy

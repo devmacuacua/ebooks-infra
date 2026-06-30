@@ -31,6 +31,13 @@ if [ "$WITH_OBS" = true ]; then
   COMPOSE_FILES="$COMPOSE_FILES -f docker-compose.observability.yml"
 fi
 
+# Remove containers antigos que possam conflituar (de runs anteriores sem project name, etc.)
+echo "==> Cleaning up old containers..."
+docker compose $COMPOSE_FILES down --remove-orphans 2>/dev/null || true
+# Força remoção de containers ebooks-* que possam ter ficado pendurados
+docker ps -a --filter "name=ebooks-" --format "{{.Names}}" \
+  | xargs -r docker rm -f 2>/dev/null || true
+
 echo "==> Starting ebooks platform..."
 docker compose $COMPOSE_FILES up -d $BUILD_FLAG
 
